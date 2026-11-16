@@ -3,14 +3,29 @@
 
     <application
         android:allowBackup="false"
-        android:label="Dark Status Bar">
+        android:label="Dark Status Bar"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <provider
+            android:name=".ConfigProvider"
+            android:authorities="com.furina.darkstatusbar.cfg"
+            android:exported="true" />
 
         <meta-data
             android:name="xposedmodule"
             android:value="true" />
         <meta-data
             android:name="xposeddescription"
-            android:value="Ép icon thanh trạng thái HyperOS luôn tối (chống burn-in OLED)" />
+            android:value="Ép icon thanh trạng thái HyperOS luôn tối và chỉnh độ mờ trực tiếp bằng app" />
         <meta-data
             android:name="xposedminversion"
             android:value="82" />
