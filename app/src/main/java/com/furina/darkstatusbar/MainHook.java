@@ -29,7 +29,8 @@ public class MainHook implements IXposedHookLoadPackage {
     private static final int BATTERY_ALPHA = 0x66;
 
     // true = làm mờ cả số trong pin (chỉ kiểu Hollow).
-    private static final boolean DIM_NUMBER = false;
+    private static final boolean DIM_NUMBER = true;
+    private static final int NUMBER_ALPHA = 0x80;
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -87,7 +88,7 @@ public class MainHook implements IXposedHookLoadPackage {
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) {
                             for (String f : fields) {
-                                dim(param.thisObject, f);
+                                dim(param.thisObject, f, "batteryLevelWhite".equals(f) ? NUMBER_ALPHA : BATTERY_ALPHA);
                             }
                         }
                     });
@@ -98,10 +99,10 @@ public class MainHook implements IXposedHookLoadPackage {
         }
     }
 
-    private static void dim(Object obj, String field) {
+    private static void dim(Object obj, String field, int alpha) {
         try {
             int c = XposedHelpers.getIntField(obj, field);
-            int d = (c & 0x00FFFFFF) | (BATTERY_ALPHA << 24);
+            int d = (c & 0x00FFFFFF) | (alpha << 24);
             if (c != d) {
                 XposedHelpers.setIntField(obj, field, d);
             }
