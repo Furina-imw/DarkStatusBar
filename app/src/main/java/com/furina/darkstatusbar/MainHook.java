@@ -26,11 +26,11 @@ public class MainHook implements IXposedHookLoadPackage {
     private static final int ICON_COLOR = 0x66808080;
 
     // Độ đục của màu pin khi sạc/pin yếu... (0x66 = 40%, 0x99 = 60%, 0x80 = 50%).
-    private static final int BATTERY_ALPHA = 0x66;
+    private static final int BATTERY_ALPHA = 0x4D;
 
     // true = làm mờ cả số trong pin (chỉ kiểu Hollow).
     private static final boolean DIM_NUMBER = true;
-    private static final int NUMBER_ALPHA = 0x80;
+    private static final int NUMBER_ALPHA = 0x55;
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
