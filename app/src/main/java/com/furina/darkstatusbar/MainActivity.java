@@ -36,6 +36,8 @@ public class MainActivity extends Activity {
     private final ArrayList<Integer> barDefaults = new ArrayList<>();
     private Switch swEnabled;
     private Switch swNumber;
+    private Switch swSkipDark;
+    private Switch swSkipLand;
     private Switch swApp;
     private TextView pvIcons;
     private TextView pvNumber;
@@ -66,6 +68,30 @@ public class MainActivity extends Activity {
             }
         });
         root.addView(swEnabled);
+
+        swSkipDark = new Switch(this);
+        swSkipDark.setText("Không làm mờ khi nền thanh trạng thái tối (icon trắng)");
+        swSkipDark.setChecked(sp.getBoolean(ConfigProvider.K_SKIP_DARK, ConfigProvider.D_SKIP_DARK));
+        swSkipDark.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton b, boolean checked) {
+                sp.edit().putBoolean(ConfigProvider.K_SKIP_DARK, checked).apply();
+                changed();
+            }
+        });
+        root.addView(swSkipDark);
+
+        swSkipLand = new Switch(this);
+        swSkipLand.setText("Tự tắt làm mờ khi xoay ngang");
+        swSkipLand.setChecked(sp.getBoolean(ConfigProvider.K_SKIP_LAND, ConfigProvider.D_SKIP_LAND));
+        swSkipLand.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton b, boolean checked) {
+                sp.edit().putBoolean(ConfigProvider.K_SKIP_LAND, checked).apply();
+                changed();
+            }
+        });
+        root.addView(swSkipLand);
 
         // Xem trước (xấp xỉ, màu thật phụ thuộc nền thanh trạng thái)
         LinearLayout box = new LinearLayout(this);
@@ -187,6 +213,8 @@ public class MainActivity extends Activity {
         sp.edit().clear().apply();
         swEnabled.setChecked(ConfigProvider.D_ENABLED);
         swNumber.setChecked(ConfigProvider.D_NUM_DIM);
+        swSkipDark.setChecked(ConfigProvider.D_SKIP_DARK);
+        swSkipLand.setChecked(ConfigProvider.D_SKIP_LAND);
         swApp.setChecked(ConfigProvider.D_APP_ON);
         for (int i = 0; i < bars.size(); i++) {
             bars.get(i).setProgress(barDefaults.get(i));

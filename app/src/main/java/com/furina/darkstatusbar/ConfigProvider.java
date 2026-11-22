@@ -23,6 +23,11 @@ public class ConfigProvider extends ContentProvider {
     public static final String K_ENABLED = "enabled";
     public static final boolean D_ENABLED = true;
 
+    public static final String K_SKIP_DARK = "skip_dark";
+    public static final boolean D_SKIP_DARK = true;
+    public static final String K_SKIP_LAND = "skip_land";
+    public static final boolean D_SKIP_LAND = true;
+
     public static final String K_ICON_ALPHA = "icon_alpha";   // 0..100 (%)
     public static final int D_ICON_ALPHA = 40;
     public static final String K_ICON_GRAY = "icon_gray";     // 0..255
@@ -58,6 +63,8 @@ public class ConfigProvider extends ContentProvider {
         SharedPreferences sp = getContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         Bundle b = new Bundle();
         b.putBoolean(K_ENABLED, sp.getBoolean(K_ENABLED, D_ENABLED));
+        b.putBoolean(K_SKIP_DARK, sp.getBoolean(K_SKIP_DARK, D_SKIP_DARK));
+        b.putBoolean(K_SKIP_LAND, sp.getBoolean(K_SKIP_LAND, D_SKIP_LAND));
         b.putInt(K_ICON_ALPHA, sp.getInt(K_ICON_ALPHA, D_ICON_ALPHA));
         b.putInt(K_ICON_GRAY, sp.getInt(K_ICON_GRAY, D_ICON_GRAY));
         b.putInt(K_FILL_ALPHA, sp.getInt(K_FILL_ALPHA, D_FILL_ALPHA));
