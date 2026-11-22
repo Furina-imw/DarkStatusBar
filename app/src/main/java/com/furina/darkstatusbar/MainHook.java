@@ -63,8 +63,6 @@ public class MainHook implements IXposedHookLoadPackage {
         boolean skipDark = ConfigProvider.D_SKIP_DARK;
         boolean skipLand = ConfigProvider.D_SKIP_LAND;
         boolean shadeOn = ConfigProvider.D_SHADE_ON;
-        boolean peekOn = ConfigProvider.D_PEEK_ON;
-        int peekMs = ConfigProvider.D_PEEK_MS;
         boolean appOn = ConfigProvider.D_APP_ON;
         float appAlpha = ConfigProvider.D_APP_ALPHA / 100f;
         float appBright = ConfigProvider.D_APP_BRIGHT / 100f;
@@ -96,8 +94,6 @@ public class MainHook implements IXposedHookLoadPackage {
         c.numBright = clamp(b.getInt(ConfigProvider.K_NUM_BRIGHT,
                 ConfigProvider.D_NUM_BRIGHT), 0, 100) / 100f;
         c.skipDark = b.getBoolean(ConfigProvider.K_SKIP_DARK, ConfigProvider.D_SKIP_DARK);
-        c.peekOn = b.getBoolean(ConfigProvider.K_PEEK_ON, ConfigProvider.D_PEEK_ON);
-        c.peekMs = clamp(b.getInt(ConfigProvider.K_PEEK_MS, ConfigProvider.D_PEEK_MS), 200, 1500);
         c.shadeOn = b.getBoolean(ConfigProvider.K_SHADE_ON, ConfigProvider.D_SHADE_ON);
         c.skipLand = b.getBoolean(ConfigProvider.K_SKIP_LAND, ConfigProvider.D_SKIP_LAND);
         c.appOn = b.getBoolean(ConfigProvider.K_APP_ON, ConfigProvider.D_APP_ON);
@@ -148,7 +144,6 @@ public class MainHook implements IXposedHookLoadPackage {
     /** Hiệu ứng đang thực sự áp dụng: bật, không phải xoay ngang, không phải nền tối. */
     private static boolean active(Config c) {
         if (!c.enabled) return false;
-        if (peeking) return false;
         if (c.skipLand && isLandscape()) return false;
         // hệ thống đang dùng icon tối (đen) tức là nền thanh trạng thái sáng: giữ nguyên để dễ đọc
         if (c.skipDark && !lightIcons) return false;
@@ -267,10 +262,6 @@ public class MainHook implements IXposedHookLoadPackage {
     private static final WeakHashMap<Object, String> VIEWS = new WeakHashMap<>();
 
     private static void refreshAll() {
-        refreshAll(true);
-    }
-
-    private static void refreshAll(final boolean full) {
         new Handler(Looper.getMainLooper()).post(new Runnable() {
             @Override
             public void run() {
@@ -298,11 +289,7 @@ public class MainHook implements IXposedHookLoadPackage {
                         }
                     }
                 }
-                if (full) {
-                    refreshNotifIcons();
-                } else {
-                    refreshNotifColors();
-                }
+                refreshNotifIcons();
                 for (int i = 0; i < views.size(); i++) {
                     try {
                         XposedHelpers.callMethod(views.get(i), methods.get(i));
@@ -366,7 +353,6 @@ public class MainHook implements IXposedHookLoadPackage {
         hookDispatcher(lpparam);
         hookAppIcons(lpparam);
         hookShadeIcons(lpparam);
-        hookPeek(lpparam);
 
         hookBattery(lpparam, ICON_VIEW, "onDarkChangeInternal", new String[] {
                 "mBatteryLowColor", "mBatteryChargingColor",
@@ -651,7 +637,7 @@ public class MainHook implements IXposedHookLoadPackage {
                         if (on == null || !on || !c.appOn) return;
                         float a;
                         float b;
-                        if (!c.enabled || peeking || (c.skipLand && isLandscape())) {
+                        if (!c.enabled || (c.skipLand && isLandscape())) {
                             a = 1f;
                             b = 1f;
                         } else if (lightIcons) {
@@ -740,113 +726,5 @@ public class MainHook implements IXposedHookLoadPackage {
         } catch (Throwable t) {
             XposedBridge.log(TAG + "shade hook failed: " + t);
         }
-    }
-
-    // ---- Giữ thanh trạng thái để hiện tạm thời ----
-
-    private static final String[] STATUS_BAR_VIEWS = {
-            "com.android.systemui.statusbar.phone.MiuiPhoneStatusBarView",
-            "com.android.systemui.statusbar.phone.PhoneStatusBarView"
-    };
-    private static volatile boolean peeking = false;
-    private static final Handler MAIN = new Handler(Looper.getMainLooper());
-    private static float downX;
-    private static float downY;
-    private static boolean pending = false;
-
-    private static final Runnable START_PEEK = new Runnable() {
-        @Override
-        public void run() {
-            pending = false;
-            if (!peeking) {
-                peeking = true;
-                refreshAll(false);
-            }
-        }
-    };
-
-    private static void stopPeek() {
-        MAIN.removeCallbacks(START_PEEK);
-        pending = false;
-        if (peeking) {
-            peeking = false;
-            refreshAll(false);
-        }
-    }
-
-    private void hookPeek(XC_LoadPackage.LoadPackageParam lpparam) {
-        Class<?> target = null;
-        for (String n : STATUS_BAR_VIEWS) {
-            try {
-                target = XposedHelpers.findClass(n, lpparam.classLoader);
-                break;
-            } catch (Throwable ignored) {
-                // thử tên lớp tiếp theo
-            }
-        }
-        if (target == null) {
-            XposedBridge.log(TAG + "peek: status bar view class not found");
-            return;
-        }
-        final Class<?> view = target;
-        // tìm lớp khai báo dispatchTouchEvent trong chuỗi kế thừa
-        Class<?> declaring = null;
-        for (Class<?> k = target; k != null; k = k.getSuperclass()) {
-            try {
-                k.getDeclaredMethod("dispatchTouchEvent", android.view.MotionEvent.class);
-                declaring = k;
-                break;
-            } catch (NoSuchMethodException ignored) {
-                // lên lớp cha
-            }
-        }
-        if (declaring == null) {
-            XposedBridge.log(TAG + "peek: dispatchTouchEvent not found");
-            return;
-        }
-        XposedBridge.hookAllMethods(declaring, "dispatchTouchEvent", new XC_MethodHook() {
-            @Override
-            protected void beforeHookedMethod(MethodHookParam param) {
-                if (!view.isInstance(param.thisObject)) return;
-                try {
-                    Config c = cfg;
-                    if (!c.peekOn || !c.enabled) return;
-                    android.view.MotionEvent ev = (android.view.MotionEvent) param.args[0];
-                    switch (ev.getActionMasked()) {
-                        case android.view.MotionEvent.ACTION_DOWN:
-                            ensureInit();
-                            downX = ev.getRawX();
-                            downY = ev.getRawY();
-                            MAIN.removeCallbacks(START_PEEK);
-                            pending = true;
-                            MAIN.postDelayed(START_PEEK, c.peekMs);
-                            break;
-                        case android.view.MotionEvent.ACTION_MOVE:
-                            if (pending) {
-                                int slop = android.view.ViewConfiguration.get(
-                                        ((android.view.View) param.thisObject).getContext())
-                                        .getScaledTouchSlop();
-                                float dx = ev.getRawX() - downX;
-                                float dy = ev.getRawY() - downY;
-                                if (dx * dx + dy * dy > (float) slop * slop) {
-                                    MAIN.removeCallbacks(START_PEEK);
-                                    pending = false;
-                                }
-                            }
-                            break;
-                        case android.view.MotionEvent.ACTION_UP:
-                        case android.view.MotionEvent.ACTION_CANCEL:
-                            stopPeek();
-                            break;
-                        default:
-                            break;
-                    }
-                } catch (Throwable t) {
-                    XposedBridge.log(TAG + "peek touch failed: " + t);
-                }
-            }
-        });
-        XposedBridge.log(TAG + "hooked peek on " + declaring.getName()
-                + " for " + target.getName());
     }
 }

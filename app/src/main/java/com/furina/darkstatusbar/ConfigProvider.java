@@ -62,12 +62,6 @@ public class ConfigProvider extends ContentProvider {
     public static final String K_SHADE_ON = "shade_on";
     public static final boolean D_SHADE_ON = true;
 
-    // Giữ ngón tay trên thanh trạng thái để hiện tạm thời không bị làm mờ
-    public static final String K_PEEK_ON = "peek_on";
-    public static final boolean D_PEEK_ON = true;
-    public static final String K_PEEK_MS = "peek_ms";         // thời gian giữ, mili giây
-    public static final int D_PEEK_MS = 500;
-
     @Override
     public boolean onCreate() {
         return true;
@@ -92,8 +86,6 @@ public class ConfigProvider extends ContentProvider {
         b.putInt(K_APP_ALPHA, sp.getInt(K_APP_ALPHA, D_APP_ALPHA));
         b.putInt(K_APP_BRIGHT, sp.getInt(K_APP_BRIGHT, D_APP_BRIGHT));
         b.putBoolean(K_SHADE_ON, sp.getBoolean(K_SHADE_ON, D_SHADE_ON));
-        b.putBoolean(K_PEEK_ON, sp.getBoolean(K_PEEK_ON, D_PEEK_ON));
-        b.putInt(K_PEEK_MS, sp.getInt(K_PEEK_MS, D_PEEK_MS));
         b.putInt(K_APPL_ALPHA, sp.getInt(K_APPL_ALPHA, D_APPL_ALPHA));
         b.putInt(K_APPL_BRIGHT, sp.getInt(K_APPL_BRIGHT, D_APPL_BRIGHT));
         return b;
