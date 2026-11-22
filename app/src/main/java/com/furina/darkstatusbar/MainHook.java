@@ -65,6 +65,8 @@ public class MainHook implements IXposedHookLoadPackage {
         boolean appOn = ConfigProvider.D_APP_ON;
         float appAlpha = ConfigProvider.D_APP_ALPHA / 100f;
         float appBright = ConfigProvider.D_APP_BRIGHT / 100f;
+        float applAlpha = ConfigProvider.D_APPL_ALPHA / 100f;
+        float applBright = ConfigProvider.D_APPL_BRIGHT / 100f;
     }
 
     private static volatile Config cfg = new Config();
@@ -97,6 +99,10 @@ public class MainHook implements IXposedHookLoadPackage {
                 ConfigProvider.D_APP_ALPHA), 0, 100) / 100f;
         c.appBright = clamp(b.getInt(ConfigProvider.K_APP_BRIGHT,
                 ConfigProvider.D_APP_BRIGHT), 0, 100) / 100f;
+        c.applAlpha = clamp(b.getInt(ConfigProvider.K_APPL_ALPHA,
+                ConfigProvider.D_APPL_ALPHA), 0, 100) / 100f;
+        c.applBright = clamp(b.getInt(ConfigProvider.K_APPL_BRIGHT,
+                ConfigProvider.D_APPL_BRIGHT), 0, 100) / 100f;
         return c;
     }
 
@@ -115,10 +121,28 @@ public class MainHook implements IXposedHookLoadPackage {
         }
     }
 
+    /** Đọc hướng màn hình tại thời điểm gọi (không phụ thuộc sự kiện đã bỏ lỡ). */
+    private static boolean isLandscape() {
+        boolean l = landscape;
+        try {
+            if (appContext != null) {
+                l = appContext.getResources().getConfiguration().orientation
+                        == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+            }
+        } catch (Throwable ignored) {
+            // dùng giá trị từ callback
+        }
+        if (l != landscape) {
+            landscape = l;
+            XposedBridge.log(TAG + "landscape=" + l);
+        }
+        return l;
+    }
+
     /** Hiệu ứng đang thực sự áp dụng: bật, không phải xoay ngang, không phải nền tối. */
     private static boolean active(Config c) {
         if (!c.enabled) return false;
-        if (c.skipLand && landscape) return false;
+        if (c.skipLand && isLandscape()) return false;
         // hệ thống đang dùng icon tối (đen) tức là nền thanh trạng thái sáng: giữ nguyên để dễ đọc
         if (c.skipDark && !lightIcons) return false;
         return true;
@@ -207,7 +231,7 @@ public class MainHook implements IXposedHookLoadPackage {
 
     private static WeakReference<Object> dispatcherRef;
     private static volatile float lastRealIntensity = 0f;
-    private static volatile boolean lastActive = true;
+    private static volatile int lastState = -1;
     private static volatile boolean lightIcons = false;
 
     /** Độ sáng (0..1) của màu icon mà hệ thống sẽ dùng, nội suy từ tông sáng/tối gốc. */
@@ -225,6 +249,14 @@ public class MainHook implements IXposedHookLoadPackage {
             return Boolean.FALSE;
         }
     };
+    private static final WeakHashMap<Object, Boolean> DISPATCHERS = new WeakHashMap<>();
+    private static final WeakHashMap<Object, Boolean> APPLIED = new WeakHashMap<>();
+    private static final ThreadLocal<Boolean> IN_SYNC = new ThreadLocal<Boolean>() {
+        @Override
+        protected Boolean initialValue() {
+            return Boolean.FALSE;
+        }
+    };
     private static final WeakHashMap<Object, String> VIEWS = new WeakHashMap<>();
 
     private static void refreshAll() {
@@ -232,8 +264,13 @@ public class MainHook implements IXposedHookLoadPackage {
             @Override
             public void run() {
                 try {
-                    Object d = dispatcherRef == null ? null : dispatcherRef.get();
-                    if (d != null) {
+                    ArrayList<Object> ds = new ArrayList<>();
+                    synchronized (DISPATCHERS) {
+                        for (Object k : DISPATCHERS.keySet()) {
+                            if (k != null) ds.add(k);
+                        }
+                    }
+                    for (Object d : ds) {
                         XposedHelpers.callMethod(d, "applyDarkIntensity", lastRealIntensity);
                     }
                 } catch (Throwable t) {
@@ -336,6 +373,9 @@ public class MainHook implements IXposedHookLoadPackage {
                     Config c = cfg;
                     float incoming = (Float) param.args[0];
                     dispatcherRef = new WeakReference<Object>(param.thisObject);
+                    synchronized (DISPATCHERS) {
+                        DISPATCHERS.put(param.thisObject, Boolean.TRUE);
+                    }
                     // updateResource() gọi lại với giá trị đã bị ép: không coi là giá trị thật
                     if (!IN_ECHO.get()) {
                         lastRealIntensity = incoming;
@@ -353,8 +393,12 @@ public class MainHook implements IXposedHookLoadPackage {
                         XposedBridge.log(TAG + "luma failed: " + t);
                     }
                     boolean act = active(c);
-                    if (act != lastActive) {
-                        lastActive = act;
+                    synchronized (APPLIED) {
+                        APPLIED.put(param.thisObject, act);
+                    }
+                    int state = (act ? 1 : 0) | (lightIcons ? 2 : 0) | (isLandscape() ? 4 : 0);
+                    if (state != lastState) {
+                        lastState = state;
                         refreshNotifColors();
                     }
                     try {
@@ -367,6 +411,34 @@ public class MainHook implements IXposedHookLoadPackage {
                         }
                     } catch (Throwable t) {
                         XposedBridge.log(TAG + "dispatcher failed: " + t);
+                    }
+                }
+            });
+            // Khi thanh trạng thái hiện lại (vuốt xuống ở màn hình ngang...), hệ thống gọi
+            // applyIconTint với màu đã lưu: đồng bộ lại nếu trạng thái hiện tại đã khác.
+            XposedBridge.hookAllMethods(clazz, "applyIconTint", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    if (IN_SYNC.get()) return;
+                    try {
+                        ensureInit();
+                        Object self = param.thisObject;
+                        Boolean applied;
+                        synchronized (APPLIED) {
+                            applied = APPLIED.get(self);
+                        }
+                        if (applied == null) return;
+                        if (applied != active(cfg)) {
+                            IN_SYNC.set(Boolean.TRUE);
+                            try {
+                                XposedHelpers.callMethod(self, "applyDarkIntensity",
+                                        lastRealIntensity);
+                            } finally {
+                                IN_SYNC.set(Boolean.FALSE);
+                            }
+                        }
+                    } catch (Throwable t) {
+                        XposedBridge.log(TAG + "applyIconTint sync failed: " + t);
                     }
                 }
             });
@@ -560,15 +632,25 @@ public class MainHook implements IXposedHookLoadPackage {
                         }
                         Config c = cfg;
                         if (on == null || !on || !c.appOn) return;
-                        if (!active(c)) {
-                            // nền tối / xoay ngang: giữ nguyên màu icon ứng dụng, không phủ màu
+                        float a;
+                        float b;
+                        if (!c.enabled || (c.skipLand && isLandscape())) {
+                            a = 1f;
+                            b = 1f;
+                        } else if (lightIcons) {
+                            a = c.appAlpha;
+                            b = c.appBright;
+                        } else {
+                            // thanh trạng thái sáng (icon đen): làm mờ riêng icon ứng dụng
+                            a = c.applAlpha;
+                            b = c.applBright;
+                        }
+                        if (a >= 0.999f && b >= 0.999f) {
                             XposedHelpers.callMethod(param.thisObject, "setColorFilter",
                                     new Class<?>[] {android.graphics.ColorFilter.class},
                                     new Object[] {null});
                             return;
                         }
-                        float b = c.appBright;
-                        float a = c.appAlpha;
                         float[] m = {
                                 b, 0, 0, 0, 0,
                                 0, b, 0, 0, 0,

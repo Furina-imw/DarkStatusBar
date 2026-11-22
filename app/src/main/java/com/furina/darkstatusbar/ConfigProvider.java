@@ -52,6 +52,12 @@ public class ConfigProvider extends ContentProvider {
     public static final String K_APP_BRIGHT = "app_bright";   // 0..100 (%)
     public static final int D_APP_BRIGHT = 60;
 
+    // Icon ứng dụng khi thanh trạng thái sáng (icon đen): vẫn làm mờ riêng nhóm này
+    public static final String K_APPL_ALPHA = "appl_alpha";   // 0..100 (%)
+    public static final int D_APPL_ALPHA = 60;
+    public static final String K_APPL_BRIGHT = "appl_bright"; // 0..100 (%)
+    public static final int D_APPL_BRIGHT = 100;
+
     @Override
     public boolean onCreate() {
         return true;
@@ -75,6 +81,8 @@ public class ConfigProvider extends ContentProvider {
         b.putBoolean(K_APP_ON, sp.getBoolean(K_APP_ON, D_APP_ON));
         b.putInt(K_APP_ALPHA, sp.getInt(K_APP_ALPHA, D_APP_ALPHA));
         b.putInt(K_APP_BRIGHT, sp.getInt(K_APP_BRIGHT, D_APP_BRIGHT));
+        b.putInt(K_APPL_ALPHA, sp.getInt(K_APPL_ALPHA, D_APPL_ALPHA));
+        b.putInt(K_APPL_BRIGHT, sp.getInt(K_APPL_BRIGHT, D_APPL_BRIGHT));
         return b;
     }
 

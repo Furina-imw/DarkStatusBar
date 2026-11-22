@@ -159,6 +159,11 @@ public class MainActivity extends Activity {
                 ConfigProvider.D_APP_ALPHA, "%");
         addSlider(root, "Độ sáng", ConfigProvider.K_APP_BRIGHT, 100,
                 ConfigProvider.D_APP_BRIGHT, "%");
+        root.addView(label("Icon ứng dụng khi thanh trạng thái sáng (icon đen)", 17));
+        addSlider(root, "Độ đục (100% = không mờ)", ConfigProvider.K_APPL_ALPHA, 100,
+                ConfigProvider.D_APPL_ALPHA, "%");
+        addSlider(root, "Độ sáng", ConfigProvider.K_APPL_BRIGHT, 100,
+                ConfigProvider.D_APPL_BRIGHT, "%");
 
         Button reset = new Button(this);
         reset.setText("Đặt lại mặc định");
