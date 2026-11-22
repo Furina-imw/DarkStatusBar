@@ -119,8 +119,8 @@ public class MainHook implements IXposedHookLoadPackage {
     private static boolean active(Config c) {
         if (!c.enabled) return false;
         if (c.skipLand && landscape) return false;
-        // cường độ thật < 0.5: hệ thống đang dùng icon trắng trên nền tối
-        if (c.skipDark && lastRealIntensity < 0.5f) return false;
+        // hệ thống đang dùng icon sáng (trắng) tức là nền thanh trạng thái tối
+        if (c.skipDark && lightIcons) return false;
         return true;
     }
 
@@ -208,6 +208,17 @@ public class MainHook implements IXposedHookLoadPackage {
     private static WeakReference<Object> dispatcherRef;
     private static volatile float lastRealIntensity = 0f;
     private static volatile boolean lastActive = true;
+    private static volatile boolean lightIcons = false;
+
+    /** Độ sáng (0..1) của màu icon mà hệ thống sẽ dùng, nội suy từ tông sáng/tối gốc. */
+    private static float realIconLuma(Object d, float f, int darkTone) {
+        int light = XposedHelpers.getIntField(d, "mLightModeIconColorSingleTone");
+        f = Math.max(0f, Math.min(1f, f));
+        float r = ((light >> 16) & 0xFF) * (1 - f) + ((darkTone >> 16) & 0xFF) * f;
+        float g = ((light >> 8) & 0xFF) * (1 - f) + ((darkTone >> 8) & 0xFF) * f;
+        float b = (light & 0xFF) * (1 - f) + (darkTone & 0xFF) * f;
+        return (0.299f * r + 0.587f * g + 0.114f * b) / 255f;
+    }
     private static final ThreadLocal<Boolean> IN_ECHO = new ThreadLocal<Boolean>() {
         @Override
         protected Boolean initialValue() {
@@ -328,6 +339,18 @@ public class MainHook implements IXposedHookLoadPackage {
                     // updateResource() gọi lại với giá trị đã bị ép: không coi là giá trị thật
                     if (!IN_ECHO.get()) {
                         lastRealIntensity = incoming;
+                    }
+                    try {
+                        int origTone = original(param.thisObject, ICON_COLOR_FIELD);
+                        float luma = realIconLuma(param.thisObject, lastRealIntensity, origTone);
+                        boolean li = luma > 0.5f;
+                        if (li != lightIcons) {
+                            lightIcons = li;
+                            XposedBridge.log(TAG + "real=" + lastRealIntensity + " luma=" + luma
+                                    + " lightIcons=" + li);
+                        }
+                    } catch (Throwable t) {
+                        XposedBridge.log(TAG + "luma failed: " + t);
                     }
                     boolean act = active(c);
                     if (act != lastActive) {
