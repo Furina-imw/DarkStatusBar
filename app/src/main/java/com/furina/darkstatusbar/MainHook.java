@@ -119,8 +119,8 @@ public class MainHook implements IXposedHookLoadPackage {
     private static boolean active(Config c) {
         if (!c.enabled) return false;
         if (c.skipLand && landscape) return false;
-        // hệ thống đang dùng icon sáng (trắng) tức là nền thanh trạng thái tối
-        if (c.skipDark && lightIcons) return false;
+        // hệ thống đang dùng icon tối (đen) tức là nền thanh trạng thái sáng: giữ nguyên để dễ đọc
+        if (c.skipDark && !lightIcons) return false;
         return true;
     }
 

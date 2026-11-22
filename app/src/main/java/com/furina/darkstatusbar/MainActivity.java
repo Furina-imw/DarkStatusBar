@@ -70,7 +70,7 @@ public class MainActivity extends Activity {
         root.addView(swEnabled);
 
         swSkipDark = new Switch(this);
-        swSkipDark.setText("Không làm mờ khi nền thanh trạng thái tối (icon trắng)");
+        swSkipDark.setText("Không làm mờ khi thanh trạng thái sáng (icon đen)");
         swSkipDark.setChecked(sp.getBoolean(ConfigProvider.K_SKIP_DARK, ConfigProvider.D_SKIP_DARK));
         swSkipDark.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
