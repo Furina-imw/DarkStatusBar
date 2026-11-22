@@ -2,6 +2,10 @@ package com.furina.darkstatusbar;
 
 import android.content.Context;
 import android.database.ContentObserver;
+import android.graphics.Bitmap;
+import android.graphics.ColorMatrixColorFilter;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -56,6 +60,9 @@ public class MainHook implements IXposedHookLoadPackage {
         boolean numDim = ConfigProvider.D_NUM_DIM;
         int numAlpha = pct(ConfigProvider.D_NUM_ALPHA);
         float numBright = ConfigProvider.D_NUM_BRIGHT / 100f;
+        boolean appOn = ConfigProvider.D_APP_ON;
+        float appAlpha = ConfigProvider.D_APP_ALPHA / 100f;
+        float appBright = ConfigProvider.D_APP_BRIGHT / 100f;
     }
 
     private static volatile Config cfg = new Config();
@@ -81,6 +88,11 @@ public class MainHook implements IXposedHookLoadPackage {
         c.numAlpha = pct(b.getInt(ConfigProvider.K_NUM_ALPHA, ConfigProvider.D_NUM_ALPHA));
         c.numBright = clamp(b.getInt(ConfigProvider.K_NUM_BRIGHT,
                 ConfigProvider.D_NUM_BRIGHT), 0, 100) / 100f;
+        c.appOn = b.getBoolean(ConfigProvider.K_APP_ON, ConfigProvider.D_APP_ON);
+        c.appAlpha = clamp(b.getInt(ConfigProvider.K_APP_ALPHA,
+                ConfigProvider.D_APP_ALPHA), 0, 100) / 100f;
+        c.appBright = clamp(b.getInt(ConfigProvider.K_APP_BRIGHT,
+                ConfigProvider.D_APP_BRIGHT), 0, 100) / 100f;
         return c;
     }
 
@@ -172,6 +184,7 @@ public class MainHook implements IXposedHookLoadPackage {
                         }
                     }
                 }
+                refreshNotifIcons();
                 for (int i = 0; i < views.size(); i++) {
                     try {
                         XposedHelpers.callMethod(views.get(i), methods.get(i));
@@ -233,6 +246,7 @@ public class MainHook implements IXposedHookLoadPackage {
         if (!TARGET_PKG.equals(lpparam.packageName)) return;
 
         hookDispatcher(lpparam);
+        hookAppIcons(lpparam);
 
         hookBattery(lpparam, ICON_VIEW, "onDarkChangeInternal", new String[] {
                 "mBatteryLowColor", "mBatteryChargingColor",
@@ -315,6 +329,137 @@ public class MainHook implements IXposedHookLoadPackage {
                     + className + "." + method);
         } catch (Throwable t) {
             XposedBridge.log(TAG + "battery hook failed (" + className + "): " + t);
+        }
+    }
+
+    // ---- Icon ứng dụng màu cho thông báo trên thanh trạng thái ----
+
+    private static final String ICON_VIEW_CLASS =
+            "com.android.systemui.statusbar.StatusBarIconView";
+    private static final String DEPENDENCY = "com.miui.systemui.MiuiDependency";
+    private static final String APP_ICONS = "com.miui.systemui.graphics.AppIconsManager";
+    private static final int MAX_ICON_PX = 96;
+
+    // mọi StatusBarIconView của thông báo đã đi qua getIcon -> đang thay icon ứng dụng hay không
+    private static final WeakHashMap<Object, Boolean> NOTIF_VIEWS = new WeakHashMap<>();
+    private static ClassLoader sysLoader;
+
+    private static void refreshNotifIcons() {
+        ArrayList<Object> views = new ArrayList<>();
+        synchronized (NOTIF_VIEWS) {
+            for (Object k : NOTIF_VIEWS.keySet()) {
+                if (k != null) views.add(k);
+            }
+        }
+        for (Object v : views) {
+            try {
+                XposedHelpers.callMethod(v, "updateDrawable", true);
+                XposedHelpers.callMethod(v, "updateIconColor");
+            } catch (Throwable t) {
+                XposedBridge.log(TAG + "refresh notif icon failed: " + t);
+            }
+        }
+    }
+
+    private static Drawable loadAppIcon(Object view, Object sbn) {
+        Drawable result = null;
+        try {
+            String pkg = (String) XposedHelpers.callMethod(sbn, "getPackageName");
+            Object user = XposedHelpers.callMethod(sbn, "getUser");
+            int uid = (Integer) XposedHelpers.callMethod(user, "getIdentifier");
+            if (uid < 0) uid = 0;
+            Class<?> dep = XposedHelpers.findClass(DEPENDENCY, sysLoader);
+            Class<?> mgrCls = XposedHelpers.findClass(APP_ICONS, sysLoader);
+            Object mgr = XposedHelpers.callStaticMethod(dep, "get", mgrCls);
+            if (mgr != null) {
+                Object bmp = XposedHelpers.callMethod(mgr, "getAppIconBitmap", uid, pkg);
+                if (bmp instanceof Bitmap && !((Bitmap) bmp).isRecycled()) {
+                    Bitmap b = (Bitmap) bmp;
+                    if (b.getWidth() > MAX_ICON_PX) {
+                        b = Bitmap.createScaledBitmap(b, MAX_ICON_PX, MAX_ICON_PX, true);
+                    }
+                    Context ctx = ((android.view.View) view).getContext();
+                    result = new BitmapDrawable(ctx.getResources(), b);
+                }
+            }
+        } catch (Throwable ignored) {
+            // thử đường dự phòng bên dưới
+        }
+        if (result == null) {
+            try {
+                Object d = XposedHelpers.getObjectField(sbn, "mAppIcon");
+                if (d instanceof Drawable) {
+                    Drawable.ConstantState cs = ((Drawable) d).getConstantState();
+                    result = cs != null ? cs.newDrawable() : (Drawable) d;
+                }
+            } catch (Throwable ignored) {
+                // không có icon ứng dụng: giữ icon gốc
+            }
+        }
+        return result;
+    }
+
+    private void hookAppIcons(XC_LoadPackage.LoadPackageParam lpparam) {
+        sysLoader = lpparam.classLoader;
+        try {
+            Class<?> clazz = XposedHelpers.findClass(ICON_VIEW_CLASS, lpparam.classLoader);
+
+            XposedBridge.hookAllMethods(clazz, "getIcon", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.args.length != 1) return;
+                    try {
+                        Object view = param.thisObject;
+                        if (!XposedHelpers.getBooleanField(view, "mExpandNotification")) return;
+                        ensureInit();
+                        synchronized (NOTIF_VIEWS) {
+                            NOTIF_VIEWS.put(view, Boolean.FALSE);
+                        }
+                        Config c = cfg;
+                        if (!c.appOn) return;
+                        if (XposedHelpers.getBooleanField(view, "mShowsConversation")) return;
+                        Object sbn = XposedHelpers.getObjectField(view, "mNotification");
+                        if (sbn == null) return;
+                        if ("android".equals(XposedHelpers.callMethod(sbn, "getOpPkg"))) return;
+                        Drawable d = loadAppIcon(view, sbn);
+                        if (d == null) return;
+                        param.setResult(d);
+                        synchronized (NOTIF_VIEWS) {
+                            NOTIF_VIEWS.put(view, Boolean.TRUE);
+                        }
+                    } catch (Throwable t) {
+                        XposedBridge.log(TAG + "getIcon hook failed: " + t);
+                    }
+                }
+            });
+
+            XposedBridge.hookAllMethods(clazz, "updateIconColor", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    try {
+                        Boolean on;
+                        synchronized (NOTIF_VIEWS) {
+                            on = NOTIF_VIEWS.get(param.thisObject);
+                        }
+                        Config c = cfg;
+                        if (on == null || !on || !c.appOn) return;
+                        float b = c.appBright;
+                        float a = c.appAlpha;
+                        float[] m = {
+                                b, 0, 0, 0, 0,
+                                0, b, 0, 0, 0,
+                                0, 0, b, 0, 0,
+                                0, 0, 0, a, 0};
+                        XposedHelpers.callMethod(param.thisObject, "setColorFilter",
+                                new ColorMatrixColorFilter(m));
+                    } catch (Throwable t) {
+                        XposedBridge.log(TAG + "updateIconColor hook failed: " + t);
+                    }
+                }
+            });
+            XposedBridge.log(TAG + "hooked app icons");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + "app icon hook failed: " + t);
         }
     }
 }

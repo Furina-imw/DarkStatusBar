@@ -40,6 +40,13 @@ public class ConfigProvider extends ContentProvider {
     public static final String K_NUM_BRIGHT = "num_bright";   // 0..100 (%)
     public static final int D_NUM_BRIGHT = 60;
 
+    public static final String K_APP_ON = "app_on";
+    public static final boolean D_APP_ON = true;
+    public static final String K_APP_ALPHA = "app_alpha";     // 0..100 (%)
+    public static final int D_APP_ALPHA = 55;
+    public static final String K_APP_BRIGHT = "app_bright";   // 0..100 (%)
+    public static final int D_APP_BRIGHT = 60;
+
     @Override
     public boolean onCreate() {
         return true;
@@ -58,6 +65,9 @@ public class ConfigProvider extends ContentProvider {
         b.putBoolean(K_NUM_DIM, sp.getBoolean(K_NUM_DIM, D_NUM_DIM));
         b.putInt(K_NUM_ALPHA, sp.getInt(K_NUM_ALPHA, D_NUM_ALPHA));
         b.putInt(K_NUM_BRIGHT, sp.getInt(K_NUM_BRIGHT, D_NUM_BRIGHT));
+        b.putBoolean(K_APP_ON, sp.getBoolean(K_APP_ON, D_APP_ON));
+        b.putInt(K_APP_ALPHA, sp.getInt(K_APP_ALPHA, D_APP_ALPHA));
+        b.putInt(K_APP_BRIGHT, sp.getInt(K_APP_BRIGHT, D_APP_BRIGHT));
         return b;
     }
 

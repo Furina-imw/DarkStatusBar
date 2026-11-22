@@ -36,6 +36,7 @@ public class MainActivity extends Activity {
     private final ArrayList<Integer> barDefaults = new ArrayList<>();
     private Switch swEnabled;
     private Switch swNumber;
+    private Switch swApp;
     private TextView pvIcons;
     private TextView pvNumber;
 
@@ -116,6 +117,23 @@ public class MainActivity extends Activity {
         addSlider(root, "Độ sáng số", ConfigProvider.K_NUM_BRIGHT, 100,
                 ConfigProvider.D_NUM_BRIGHT, "%");
 
+        root.addView(label("Icon ứng dụng trên thanh thông báo", 17));
+        swApp = new Switch(this);
+        swApp.setText("Hiện icon ứng dụng màu (kiểu Android)");
+        swApp.setChecked(sp.getBoolean(ConfigProvider.K_APP_ON, ConfigProvider.D_APP_ON));
+        swApp.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton b, boolean checked) {
+                sp.edit().putBoolean(ConfigProvider.K_APP_ON, checked).apply();
+                changed();
+            }
+        });
+        root.addView(swApp);
+        addSlider(root, "Độ đục", ConfigProvider.K_APP_ALPHA, 100,
+                ConfigProvider.D_APP_ALPHA, "%");
+        addSlider(root, "Độ sáng", ConfigProvider.K_APP_BRIGHT, 100,
+                ConfigProvider.D_APP_BRIGHT, "%");
+
         Button reset = new Button(this);
         reset.setText("Đặt lại mặc định");
         reset.setOnClickListener(new View.OnClickListener() {
@@ -169,6 +187,7 @@ public class MainActivity extends Activity {
         sp.edit().clear().apply();
         swEnabled.setChecked(ConfigProvider.D_ENABLED);
         swNumber.setChecked(ConfigProvider.D_NUM_DIM);
+        swApp.setChecked(ConfigProvider.D_APP_ON);
         for (int i = 0; i < bars.size(); i++) {
             bars.get(i).setProgress(barDefaults.get(i));
         }
