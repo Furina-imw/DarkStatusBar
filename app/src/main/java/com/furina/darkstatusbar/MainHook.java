@@ -62,6 +62,7 @@ public class MainHook implements IXposedHookLoadPackage {
         float numBright = ConfigProvider.D_NUM_BRIGHT / 100f;
         boolean skipDark = ConfigProvider.D_SKIP_DARK;
         boolean skipLand = ConfigProvider.D_SKIP_LAND;
+        boolean shadeOn = ConfigProvider.D_SHADE_ON;
         boolean appOn = ConfigProvider.D_APP_ON;
         float appAlpha = ConfigProvider.D_APP_ALPHA / 100f;
         float appBright = ConfigProvider.D_APP_BRIGHT / 100f;
@@ -93,6 +94,7 @@ public class MainHook implements IXposedHookLoadPackage {
         c.numBright = clamp(b.getInt(ConfigProvider.K_NUM_BRIGHT,
                 ConfigProvider.D_NUM_BRIGHT), 0, 100) / 100f;
         c.skipDark = b.getBoolean(ConfigProvider.K_SKIP_DARK, ConfigProvider.D_SKIP_DARK);
+        c.shadeOn = b.getBoolean(ConfigProvider.K_SHADE_ON, ConfigProvider.D_SHADE_ON);
         c.skipLand = b.getBoolean(ConfigProvider.K_SKIP_LAND, ConfigProvider.D_SKIP_LAND);
         c.appOn = b.getBoolean(ConfigProvider.K_APP_ON, ConfigProvider.D_APP_ON);
         c.appAlpha = clamp(b.getInt(ConfigProvider.K_APP_ALPHA,
@@ -350,6 +352,7 @@ public class MainHook implements IXposedHookLoadPackage {
 
         hookDispatcher(lpparam);
         hookAppIcons(lpparam);
+        hookShadeIcons(lpparam);
 
         hookBattery(lpparam, ICON_VIEW, "onDarkChangeInternal", new String[] {
                 "mBatteryLowColor", "mBatteryChargingColor",
@@ -666,6 +669,62 @@ public class MainHook implements IXposedHookLoadPackage {
             XposedBridge.log(TAG + "hooked app icons");
         } catch (Throwable t) {
             XposedBridge.log(TAG + "app icon hook failed: " + t);
+        }
+    }
+
+    // ---- Icon ứng dụng trong thẻ thông báo (kiểu Android) ----
+
+    private static final String HEADER_WRAPPER =
+            "com.android.systemui.statusbar.notification.row.wrapper.NotificationHeaderViewWrapper";
+    private static final String NOTIF_IMAGE_UTIL =
+            "com.android.systemui.statusbar.notification.utils.NotifImageUtil";
+
+    private static void applyShadeIcon(Object wrapper) {
+        try {
+            if (!cfg.shadeOn) return;
+            Object icon = XposedHelpers.getObjectField(wrapper, "mIcon");
+            if (!(icon instanceof android.view.View)) return;
+            Object row = XposedHelpers.getObjectField(wrapper, "mRow");
+            if (row == null) return;
+            Object entry = XposedHelpers.callMethod(row, "getEntry");
+            Object sbn = entry == null ? null : XposedHelpers.getObjectField(entry, "mSbn");
+            if (sbn == null) return;
+            if ("android".equals(XposedHelpers.callMethod(sbn, "getOpPkg"))) return;
+            Context ctx = ((android.view.View) icon).getContext();
+            Class<?> util = XposedHelpers.findClass(NOTIF_IMAGE_UTIL, sysLoader);
+            XposedHelpers.callStaticMethod(util, "applyAppIconAllowCustom",
+                    ctx, sbn, icon, Boolean.FALSE);
+            // bỏ lớp phủ màu và nền tròn của icon đơn sắc để icon vuông bo góc hiện nguyên
+            XposedHelpers.callMethod(icon, "setImageTintList",
+                    new Class<?>[] {android.content.res.ColorStateList.class},
+                    new Object[] {null});
+            XposedHelpers.callMethod(icon, "setColorFilter",
+                    new Class<?>[] {android.graphics.ColorFilter.class},
+                    new Object[] {null});
+            XposedHelpers.callMethod(icon, "setBackground",
+                    new Class<?>[] {Drawable.class}, new Object[] {null});
+            ((android.view.View) icon).setPadding(0, 0, 0, 0);
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + "shade icon failed: " + t);
+        }
+    }
+
+    private void hookShadeIcons(XC_LoadPackage.LoadPackageParam lpparam) {
+        sysLoader = lpparam.classLoader;
+        try {
+            Class<?> clazz = XposedHelpers.findClass(HEADER_WRAPPER, lpparam.classLoader);
+            XC_MethodHook h = new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    ensureInit();
+                    applyShadeIcon(param.thisObject);
+                }
+            };
+            XposedBridge.hookAllMethods(clazz, "resolveHeaderViews", h);
+            XposedBridge.hookAllMethods(clazz, "onContentUpdated", h);
+            XposedBridge.log(TAG + "hooked shade header icons");
+        } catch (Throwable t) {
+            XposedBridge.log(TAG + "shade hook failed: " + t);
         }
     }
 }

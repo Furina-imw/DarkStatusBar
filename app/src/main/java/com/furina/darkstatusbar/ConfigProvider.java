@@ -58,6 +58,10 @@ public class ConfigProvider extends ContentProvider {
     public static final String K_APPL_BRIGHT = "appl_bright"; // 0..100 (%)
     public static final int D_APPL_BRIGHT = 100;
 
+    // Icon ứng dụng vuông bo góc trong thẻ thông báo (trung tâm thông báo)
+    public static final String K_SHADE_ON = "shade_on";
+    public static final boolean D_SHADE_ON = true;
+
     @Override
     public boolean onCreate() {
         return true;
@@ -81,6 +85,7 @@ public class ConfigProvider extends ContentProvider {
         b.putBoolean(K_APP_ON, sp.getBoolean(K_APP_ON, D_APP_ON));
         b.putInt(K_APP_ALPHA, sp.getInt(K_APP_ALPHA, D_APP_ALPHA));
         b.putInt(K_APP_BRIGHT, sp.getInt(K_APP_BRIGHT, D_APP_BRIGHT));
+        b.putBoolean(K_SHADE_ON, sp.getBoolean(K_SHADE_ON, D_SHADE_ON));
         b.putInt(K_APPL_ALPHA, sp.getInt(K_APPL_ALPHA, D_APPL_ALPHA));
         b.putInt(K_APPL_BRIGHT, sp.getInt(K_APPL_BRIGHT, D_APPL_BRIGHT));
         return b;

@@ -38,6 +38,7 @@ public class MainActivity extends Activity {
     private Switch swNumber;
     private Switch swSkipDark;
     private Switch swSkipLand;
+    private Switch swShade;
     private Switch swApp;
     private TextView pvIcons;
     private TextView pvNumber;
@@ -159,6 +160,18 @@ public class MainActivity extends Activity {
                 ConfigProvider.D_APP_ALPHA, "%");
         addSlider(root, "Độ sáng", ConfigProvider.K_APP_BRIGHT, 100,
                 ConfigProvider.D_APP_BRIGHT, "%");
+        root.addView(label("Trung tâm thông báo", 17));
+        swShade = new Switch(this);
+        swShade.setText("Icon ứng dụng vuông bo góc trong thẻ thông báo");
+        swShade.setChecked(sp.getBoolean(ConfigProvider.K_SHADE_ON, ConfigProvider.D_SHADE_ON));
+        swShade.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton b, boolean checked) {
+                sp.edit().putBoolean(ConfigProvider.K_SHADE_ON, checked).apply();
+                changed();
+            }
+        });
+        root.addView(swShade);
         root.addView(label("Icon ứng dụng khi thanh trạng thái sáng (icon đen)", 17));
         addSlider(root, "Độ đục (100% = không mờ)", ConfigProvider.K_APPL_ALPHA, 100,
                 ConfigProvider.D_APPL_ALPHA, "%");
@@ -220,6 +233,7 @@ public class MainActivity extends Activity {
         swNumber.setChecked(ConfigProvider.D_NUM_DIM);
         swSkipDark.setChecked(ConfigProvider.D_SKIP_DARK);
         swSkipLand.setChecked(ConfigProvider.D_SKIP_LAND);
+        swShade.setChecked(ConfigProvider.D_SHADE_ON);
         swApp.setChecked(ConfigProvider.D_APP_ON);
         for (int i = 0; i < bars.size(); i++) {
             bars.get(i).setProgress(barDefaults.get(i));
